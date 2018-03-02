@@ -40,7 +40,7 @@ import com.microsoft.Malmo.Schemas.ServerHandlers;
  */
 public class MissionBehaviour
 {
-    public List<IVideoProducer> videoProducers = new ArrayList<IVideoProducer>();
+    public IVideoProducer videoProducer = null;
     public IAudioProducer audioProducer = null;
     public ICommandHandler commandHandler = null;
     public IObservationProducer observationProducer = null;
@@ -87,7 +87,7 @@ public class MissionBehaviour
 
     private void reset()
     {
-        this.videoProducers = new ArrayList<IVideoProducer>();
+        this.videoProducer = null;
         this.audioProducer = null;
         this.commandHandler = null;
         this.observationProducer = null;
@@ -180,10 +180,10 @@ public class MissionBehaviour
     
     private void addVideoProducer(IVideoProducer handler)
     {
-        if (this.videoProducers.size() > 0 && (this.videoProducers.get(0).getHeight() != handler.getHeight() || this.videoProducers.get(0).getWidth() != handler.getWidth()))
-            this.failedHandlers += "If multiple video producers are specified, they must all share the same dimensions.\n";
+        if (this.videoProducer != null)
+            this.failedHandlers += "Too many video producers specified - only one allowed at present.\n";
         else
-            this.videoProducers.add(handler);
+            this.videoProducer = handler;
     }
     
     private void addAudioProducer(IAudioProducer handler)
@@ -344,11 +344,8 @@ public class MissionBehaviour
     protected List<HandlerBase> getClientHandlerList()
     {
         List<HandlerBase> handlers = new ArrayList<HandlerBase>();
-        for (IVideoProducer vp : this.videoProducers)
-        {
-            if (vp != null && vp instanceof HandlerBase)
-                handlers.add((HandlerBase)vp);
-        }
+        if (this.videoProducer != null && this.videoProducer instanceof HandlerBase)
+            handlers.add((HandlerBase)this.videoProducer);
         if (this.audioProducer != null && this.audioProducer instanceof HandlerBase)
             handlers.add((HandlerBase)this.audioProducer);
         if (this.commandHandler != null && this.commandHandler instanceof HandlerBase)

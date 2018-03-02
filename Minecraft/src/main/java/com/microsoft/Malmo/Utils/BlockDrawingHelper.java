@@ -24,24 +24,6 @@ import java.util.List;
 
 import javax.xml.bind.JAXBElement;
 
-import com.microsoft.Malmo.Schemas.BlockType;
-import com.microsoft.Malmo.Schemas.Colour;
-import com.microsoft.Malmo.Schemas.ContainedObjectType;
-import com.microsoft.Malmo.Schemas.DrawBlock;
-import com.microsoft.Malmo.Schemas.DrawContainer;
-import com.microsoft.Malmo.Schemas.DrawCuboid;
-import com.microsoft.Malmo.Schemas.DrawEntity;
-import com.microsoft.Malmo.Schemas.DrawItem;
-import com.microsoft.Malmo.Schemas.DrawLine;
-import com.microsoft.Malmo.Schemas.DrawSign;
-import com.microsoft.Malmo.Schemas.DrawSphere;
-import com.microsoft.Malmo.Schemas.DrawingDecorator;
-import com.microsoft.Malmo.Schemas.EntityTypes;
-import com.microsoft.Malmo.Schemas.Facing;
-import com.microsoft.Malmo.Schemas.NoteTypes;
-import com.microsoft.Malmo.Schemas.ShapeTypes;
-import com.microsoft.Malmo.Schemas.Variation;
-
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockRailBase;
 import net.minecraft.block.properties.IProperty;
@@ -54,16 +36,28 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
-import net.minecraft.tileentity.TileEntityLockableLoot;
 import net.minecraft.tileentity.TileEntityMobSpawner;
 import net.minecraft.tileentity.TileEntityNote;
-import net.minecraft.tileentity.TileEntitySign;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.text.TextComponentString;
 import net.minecraft.world.World;
 import net.minecraftforge.fml.common.registry.EntityEntry;
+
+import com.microsoft.Malmo.Schemas.BlockType;
+import com.microsoft.Malmo.Schemas.Colour;
+import com.microsoft.Malmo.Schemas.DrawBlock;
+import com.microsoft.Malmo.Schemas.DrawCuboid;
+import com.microsoft.Malmo.Schemas.DrawEntity;
+import com.microsoft.Malmo.Schemas.DrawItem;
+import com.microsoft.Malmo.Schemas.DrawLine;
+import com.microsoft.Malmo.Schemas.DrawSphere;
+import com.microsoft.Malmo.Schemas.DrawingDecorator;
+import com.microsoft.Malmo.Schemas.EntityTypes;
+import com.microsoft.Malmo.Schemas.Facing;
+import com.microsoft.Malmo.Schemas.NoteTypes;
+import com.microsoft.Malmo.Schemas.ShapeTypes;
+import com.microsoft.Malmo.Schemas.Variation;
 
 /**
  *  The Mission node can specify drawing primitives, which are drawn in the world by this helper class.  
@@ -197,10 +191,6 @@ public class BlockDrawingHelper
                 DrawPrimitive( (DrawLine)obj, world );
             else if (obj instanceof DrawEntity)
                 DrawPrimitive( (DrawEntity)obj, world );
-            else if (obj instanceof DrawContainer)
-                DrawPrimitive( (DrawContainer)obj, world );
-            else if (obj instanceof DrawSign)
-                DrawPrimitive( (DrawSign)obj, world );
             else
                 throw new Exception("Unsupported drawing primitive: "+obj.getClass().getName() );
         }
@@ -220,7 +210,6 @@ public class BlockDrawingHelper
         if (!blockType.isValid())
             throw new Exception("Unrecogised item type: " + b.getType().value());
         BlockPos pos = new BlockPos( b.getX(), b.getY(), b.getZ() );
-        clearEntities(w, b.getX(), b.getY(), b.getZ(), b.getX() + 1, b.getY() + 1, b.getZ() + 1);
         setBlockState(w, pos, blockType );
     }
 
@@ -262,7 +251,7 @@ public class BlockDrawingHelper
                     {
                         BlockPos pos = new BlockPos( x, y, z );
                         setBlockState( w, pos, blockType );
-                        AxisAlignedBB aabb = new AxisAlignedBB(pos, new BlockPos(x+1, y+1, z+1));
+                        AxisAlignedBB aabb = new AxisAlignedBB(pos, pos).expand(0.5, 0.5, 0.5);
                         clearEntities(w, aabb.minX, aabb.minY, aabb.minZ, aabb.maxX, aabb.maxY, aabb.maxZ);
                     }
                 }
@@ -313,14 +302,14 @@ public class BlockDrawingHelper
             int y = Math.round(l.getY1() + (float)i * dy);
             int z = Math.round(l.getZ1() + (float)i * dz);
             BlockPos pos = new BlockPos(x, y, z);
-            clearEntities(w, x, y, z, x + 1, y + 1, z + 1);
+            clearEntities(w, x-0.5,y-0.5,z-0.5,x+0.5,y+0.5,z+0.5);
             setBlockState(w, pos, y == prevY ? blockType : stepType);
 
             // Ensure 4-connected:
             if (x != prevX && z != prevZ)
             {
                 pos = new BlockPos(x, y, prevZ);
-                clearEntities(w, x, y, prevZ, x + 1, y + 1, prevZ + 1);
+                clearEntities(w, x-0.5,y-0.5,prevZ-0.5,x+0.5,y+0.5,prevZ+0.5);
                 setBlockState(w, pos, y == prevY ? blockType : stepType);
             }
             prevY = y;
@@ -407,72 +396,6 @@ public class BlockDrawingHelper
         }
     }
 
-    protected void DrawPrimitive( DrawContainer c, World w ) throws Exception
-    {
-        // First, draw the container block:
-        String cType = c.getType().value();
-        BlockType bType = BlockType.fromValue(cType); // Safe - ContainerType is a subset of BlockType
-        XMLBlockState blockType = new XMLBlockState(bType, c.getColour(), c.getFace(), c.getVariant());
-        if (!blockType.isValid())
-            throw new Exception("Unrecogised item type: " + c.getType().value());
-        BlockPos pos = new BlockPos( c.getX(), c.getY(), c.getZ() );
-        setBlockState(w, pos, blockType );
-        // Now fill the container:
-        TileEntity tileentity = w.getTileEntity(pos);
-        if (tileentity instanceof TileEntityLockableLoot)
-        {
-            // First clear out any leftovers:
-            ((TileEntityLockableLoot)tileentity).clear();
-            int index = 0;
-            for (ContainedObjectType cot : c.getObject())
-            {
-                DrawItem di  = new DrawItem();
-                di.setColour(cot.getColour());
-                di.setType(cot.getType());
-                di.setVariant(cot.getVariant());
-                ItemStack stack = MinecraftTypeHelper.getItemStackFromDrawItem(di);
-                stack.setCount(cot.getQuantity());
-                ((TileEntityLockableLoot)tileentity).setInventorySlotContents(index, stack);
-                index++;
-            }
-        }
-    }
-
-    protected void DrawPrimitive( DrawSign s, World w ) throws Exception
-    {
-        String sType = s.getType().value();
-        BlockType bType = BlockType.fromValue(sType); // Safe - SignType is a subset of BlockType
-        XMLBlockState blockType = new XMLBlockState(bType, s.getColour(), s.getFace(), s.getVariant());
-        BlockPos pos = new BlockPos( s.getX(), s.getY(), s.getZ() );
-        setBlockState(w, pos, blockType );
-        if (blockType.type == BlockType.STANDING_SIGN && s.getRotation() != null)
-        {
-            IBlockState placedBlockState = w.getBlockState(pos);
-            if (placedBlockState != null)
-            {
-                Block placedBlock = placedBlockState.getBlock();
-                if (placedBlock != null)
-                {
-                    IBlockState rotatedBlock = placedBlock.getStateFromMeta(s.getRotation());
-                    w.setBlockState(pos, rotatedBlock);
-                }
-            }
-        }
-        TileEntity tileentity = w.getTileEntity(pos);
-        if (tileentity instanceof TileEntitySign)
-        {
-            TileEntitySign sign = (TileEntitySign)tileentity;
-            if (s.getLine1() != null)
-                sign.signText[0] = new TextComponentString(s.getLine1());
-            if (s.getLine2() != null)
-                sign.signText[1] = new TextComponentString(s.getLine2());
-            if (s.getLine3() != null)
-                sign.signText[2] = new TextComponentString(s.getLine3());
-            if (s.getLine4() != null)
-                sign.signText[3] = new TextComponentString(s.getLine4());
-        }
-    }
-
     protected void positionEntity( Entity entity, double x, double y, double z, float yaw, float pitch )
     {
         entity.setLocationAndAngles(x, y, z, yaw, pitch);
@@ -516,15 +439,14 @@ public class BlockDrawingHelper
         if (!blockType.isValid())
             throw new Exception("Unrecogised item type: "+c.getType().value());
 
+        clearEntities(w, c.getX1(), c.getY1(), c.getZ1(), c.getX2(), c.getY2(), c.getZ2());
+
         int x1 = Math.min(c.getX1(), c.getX2());
         int x2 = Math.max(c.getX1(), c.getX2());
         int y1 = Math.min(c.getY1(), c.getY2());
         int y2 = Math.max(c.getY1(), c.getY2());
         int z1 = Math.min(c.getZ1(), c.getZ2());
         int z2 = Math.max(c.getZ1(), c.getZ2());
-
-        clearEntities(w, x1, y1, z1, x2 + 1, y2 + 1, z2 + 1);
-
         for( int x = x1; x <= x2; x++ ) {
             for( int y = y1; y <= y2; y++ ) {
                 for( int z = z1; z <= z2; z++ ) {
@@ -591,7 +513,7 @@ public class BlockDrawingHelper
         if (state.type == BlockType.NOTEBLOCK)
         {
             TileEntity te = w.getTileEntity(pos);
-            if (te != null && te instanceof TileEntityNote && state.variant != null)
+            if (te != null && te instanceof TileEntityNote)
             {
                 try
                 {

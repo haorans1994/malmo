@@ -154,7 +154,7 @@ public class ObservationFromGridImplementation extends ObservationFromServer
     public static class GridRequestMessageHandler extends ObservationFromServer.ObservationRequestMessageHandler implements IMessageHandler<GridRequestMessage, IMessage>
     {
         @Override
-        void buildJson(JsonObject json, EntityPlayerMP player, ObservationRequestMessage message)
+        void buildJson(JsonObject json, EntityPlayerMP player, ObservationRequestMessage message, MessageContext ctx)
         {
             if (message instanceof GridRequestMessage)
             {
