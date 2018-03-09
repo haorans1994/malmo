@@ -36,6 +36,9 @@ import time
 import Tkinter as tk
 
 
+dqn = DQN.DQN()
+
+
 class TabQAgent:
     """Tabular Q-learning agent for discrete state/action spaces."""
 
@@ -55,85 +58,73 @@ class TabQAgent:
         self.canvas = None
         self.root = None
 
-    def updateQTable(self, reward, current_state):
-        """Change q_table to reflect what we have learnt."""
 
-        # retrieve the old action value from the Q-table (indexed by the previous state and the previous action)
-        old_q = self.q_table[self.prev_s][self.prev_a]
+    def Translate_State(self,obs):
+        s = []
+        for x in obs:
+            if (x != u'IsAlive') and (x != u'Name') :
+                s.append(float(obs[x]))
 
-        # TODO: what should the new action value be?
-        new_q = old_q
+        if obs[u'IsAlive'] == True:
+            s.append(0.0)
+        else: s.append(1.0)
+        s.append(1.0)
+        # print(len(s))
+        return s
 
-        # assign the new action value to the Q-table
-        self.q_table[self.prev_s][self.prev_a] = new_q
 
-    def updateQTableFromTerminatingState(self, reward):
-        """Change q_table to reflect what we have learnt, after reaching a terminal state."""
 
-        # retrieve the old action value from the Q-table (indexed by the previous state and the previous action)
-        old_q = self.q_table[self.prev_s][self.prev_a]
-
-        # TODO: what should the new action value be?
-        new_q = old_q
-
-        # assign the new action value to the Q-table
-        self.q_table[self.prev_s][self.prev_a] = new_q
-
-    def act(self, world_state, agent_host, current_r):
+    def act(self, world_state, agent_host, current_r, dqn):
         """take 1 action in response to the current world state"""
 
         obs_text = world_state.observations[-1].text
         obs = json.loads(obs_text)  # most recent observation
 
+        s = self.Translate_State(obs)
+
+
         self.logger.debug(obs)
-        if not u'XPos' in obs or not u'ZPos' in obs:
-            self.logger.error("Incomplete observation received: %s" % obs_text)
-            return 0
-        current_s = "%d:%d" % (int(obs[u'XPos']), int(obs[u'ZPos']))
-        self.logger.debug("State: %s (x = %.2f, z = %.2f)" % (current_s, float(obs[u'XPos']), float(obs[u'ZPos'])))
-        if not self.q_table.has_key(current_s):
-            self.q_table[current_s] = ([0] * len(self.actions))
 
-        # update Q values
-        if self.prev_s is not None and self.prev_a is not None:
-            self.updateQTable(current_r, current_s)
+        a = dqn.choose_action(s)
+        a = int(a)
 
-        self.drawQ(curr_x=int(obs[u'XPos']), curr_y=int(obs[u'ZPos']))
 
-        # select the next action
-        rnd = random.random()
-        if rnd < self.epsilon:
-            a = random.randint(0, len(self.actions) - 1)
-            self.logger.info("Random action: %s" % self.actions[a])
-        else:
-            m = max(self.q_table[current_s])
-            self.logger.debug("Current values: %s" % ",".join(str(x) for x in self.q_table[current_s]))
-            l = list()
-            for x in range(0, len(self.actions)):
-                if self.q_table[current_s][x] == m:
-                    l.append(x)
-            y = random.randint(0, len(l) - 1)
-            a = l[y]
-            self.logger.info("Taking q action: %s" % self.actions[a])
+
+        self.logger.info("Taking q action: %s" % self.actions[a])
+
+
+        if len(self.state_Record) > 0:
+            # print(len(self.state_Record),len(self.action_Record))
+            Last_State = self.state_Record[-1]
+            Last_Action = self.action_Record[-1]
+            dqn.record_transition(Last_State,Last_Action,current_r,s)
+            # print(Last_State,Last_Action,current_r,s)
+
+
+        if dqn.memoryCounter > 200:
+
+            dqn.learn()
+
 
         # try to send the selected action, only update prev_s if this succeeds
         try:
             agent_host.sendCommand(self.actions[a])
-            self.prev_s = current_s
-            self.prev_a = a
+            self.state_Record.append(s)
+            self.action_Record.append(a)
+
 
         except RuntimeError as e:
             self.logger.error("Failed to send command: %s" % e)
 
-        return current_r
+
 
     def run(self, agent_host, dqn):
         """run the agent on the world"""
 
         total_reward = 0
 
-        self.prev_s = None
-        self.prev_a = None
+        self.state_Record = []
+        self.action_Record = []
 
         is_first_action = True
 
@@ -152,15 +143,14 @@ class TabQAgent:
                 while True:
                     time.sleep(0.1)
                     world_state = agent_host.getWorldState()
-                    # for error in world_state.errors:
-                    #     self.logger.error("Error: %s" % error.text)
-                    for reward in world_state.rewards:
-                        # print(reward)
 
+                    for reward in world_state.rewards:
                         current_r += reward.getValue()
+
                     if world_state.is_mission_running and len(world_state.observations) > 0 and not \
                             world_state.observations[-1].text == "{}":
-                        total_reward += self.act(world_state, agent_host, current_r)
+                        total_reward += current_r
+                        self.act(world_state, agent_host, current_r, dqn)
                         break
                     if not world_state.is_mission_running:
                         break
@@ -172,36 +162,43 @@ class TabQAgent:
                 while world_state.is_mission_running and current_r == 0:
                     time.sleep(0.1)
                     world_state = agent_host.getWorldState()
-                    # for error in world_state.errors:
-                    #     self.logger.error("Error: %s" % error.text)
+
                     for reward in world_state.rewards:
-                        # print(reward)
                         current_r += reward.getValue()
+
                 # allow time to stabilise after action
                 while True:
                     time.sleep(0.1)
                     world_state = agent_host.getWorldState()
-                    # for error in world_state.errors:
-                    #     self.logger.error("Error: %s" % error.text)
+
                     for reward in world_state.rewards:
-                        # print(reward)
+
                         current_r += reward.getValue()
                     if world_state.is_mission_running and len(world_state.observations) > 0 and not \
                             world_state.observations[-1].text == "{}":
-                        total_reward += self.act(world_state, agent_host, current_r)
+                        total_reward += current_r
+                        self.act(world_state, agent_host, current_r, dqn)
                         break
                     if not world_state.is_mission_running:
                         break
 
+        if len(self.state_Record) != 0:
+            Dead_State = self.state_Record[-1]
+            Dead_State[-2] = Dead_State[-2] - 1
+            dqn.record_transition(self.state_Record[-1],self.action_Record[-1],current_r,Dead_State)
+
+
+
+
+
+            # dqn.record_transition(self.state_Record[-2])
+
+        # print(current_r)
         # process final reward
         self.logger.debug("Final reward: %d" % current_r)
         total_reward += current_r
 
-        # update Q values
-        if self.prev_s is not None and self.prev_a is not None:
-            self.updateQTableFromTerminatingState(current_r)
 
-        self.drawQ()
 
         return total_reward
 
@@ -286,12 +283,11 @@ max_retries = 3
 if agent_host.receivedArgument("test"):
     num_repeats = 1
 else:
-    num_repeats = 150
+    num_repeats = 1500
 
 cumulative_rewards = []
 
-dqn = 0
-xxx = DQN.DQN()
+
 for i in range(num_repeats):
 
     print

@@ -17,10 +17,10 @@ LR = 0.01
 GAMMA = 0.9
 EPSILON = 0.9
 TARGET_REPLACE_ITER = 100
-MEMORY_SIZE = 2000
+MEMORY_SIZE = 200
 
 
-STATES_DIMENTION = 14
+STATES_DIMENTION = 20
 ACTIONS_DIMENTION = 4
 
 
@@ -82,6 +82,7 @@ class DQN(object):
 
     def record_transition(self,s,a,r,next_s):
 
+
         transition = np.hstack((s,[a,r],next_s))
 
         i = self.memoryCounter % MEMORY_SIZE
@@ -109,7 +110,7 @@ class DQN(object):
         # print(loss)
 
 
-        loss_value = float(loss)
+        # loss_value = float(loss)
         # if loss_value!= None:
         #     with open('/Users/sunhaoran/Desktop/analysis.csv', 'a') as csvfile:
         #         writer = csv.writer(csvfile)
