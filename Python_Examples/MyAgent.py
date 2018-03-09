@@ -61,10 +61,11 @@ class TabQAgent:
 
     def Translate_State(self,obs):
         s = []
-        for x in obs:
-            if (x != u'IsAlive') and (x != u'Name') :
-                s.append(float(obs[x]))
-
+        # for x in obs:
+        #     if (x != u'IsAlive') and (x != u'Name') :
+        #         s.append(float(obs[x]))
+        s.append(obs[u'XPos'])
+        s.append(obs[u'ZPos'])
         if obs[u'IsAlive'] == True:
             s.append(0.0)
         else: s.append(1.0)
@@ -76,7 +77,7 @@ class TabQAgent:
 
     def act(self, world_state, agent_host, current_r, dqn):
         """take 1 action in response to the current world state"""
-
+        print(current_r)
         obs_text = world_state.observations[-1].text
         obs = json.loads(obs_text)  # most recent observation
 
@@ -267,16 +268,16 @@ if agent_host.receivedArgument("help"):
     exit(0)
 
 # -- set up the mission -- #
-mission_file = './tutorial_6.xml'
+mission_file = './simpleMap.xml'
 with open(mission_file, 'r') as f:
     print "Loading mission from %s" % mission_file
     mission_xml = f.read()
     my_mission = MalmoPython.MissionSpec(mission_xml, True)
 # add 20% holes for interest
-for x in range(1, 4):
-    for z in range(1, 13):
-        if random.random() < 0.1:
-            my_mission.drawBlock(x, 45, z, "lava")
+# for x in range(1, 4):
+#     for z in range(1, 13):
+#         if random.random() < 0.1:
+#             my_mission.drawBlock(x, 45, z, "lava")
 
 max_retries = 3
 
